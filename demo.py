@@ -77,4 +77,5 @@ for j,L in enumerate(lenList):
 plt.figure()
 plt.plot(lenList,result)
 plt.show()
+
         

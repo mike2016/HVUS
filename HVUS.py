@@ -20,7 +20,7 @@ import itertools
 import scipy.stats as ss
 import os
 from scipy import integrate
-
+from collections import Counter
     
 
 
@@ -69,28 +69,51 @@ def _bitget(byteval, idx):
 
     return ((byteval & (1 << idx)) != 0)
 
-def relative_effect(label,data,w=None):
+def relative_effect(label,data,w=None,method='rank'):
     """
         Calculate the ek value that is uesed to reorder the label 
     """
-    labelSet = list(set(label))
-    if w is None:
-        w = np.ones(len(labelSet))*1/len(labelSet)
-    
-    tVec = np.unique(data)
-    
-    Gk = np.zeros((len(tVec),len(labelSet)))
-    for k,l in enumerate(labelSet):
-        Tk = data[label==l]
-        tMinIndex = np.argmax(tVec>=Tk.min())
-        tMaxIndex = np.argmax(tVec>=Tk.max())
-        Gk[:tMinIndex,k] = 0
-        Gk[tMaxIndex:,k] = 1
-        Gk[tMinIndex:tMaxIndex,k] = np.array([np.mean(Tk<=t) for t in tVec[tMinIndex:tMaxIndex]])
+
+    if method == 'integrate':
+
+        labelSet = list(set(label))
+        if w is None:
+            w = np.ones(len(labelSet))*1/len(labelSet)
         
+        tVec = np.unique(data)
+        
+        Gk = np.zeros((len(tVec),len(labelSet)))
+        for k,l in enumerate(labelSet):
+            Tk = data[label==l]
+            tMinIndex = np.argmax(tVec>=Tk.min())
+            tMaxIndex = np.argmax(tVec>=Tk.max())
+            Gk[:tMinIndex,k] = 0
+            Gk[tMaxIndex:,k] = 1
+            Gk[tMinIndex:tMaxIndex,k] = np.array([np.mean(Tk<=t) for t in tVec[tMinIndex:tMaxIndex]])
             
-    G_plus = (Gk*w).sum(axis=1)
-    ek = [integrate.trapz(G_plus, Gk[:,k]) for k in range(len(labelSet)) ] 
+                
+        G_plus = (Gk*w).sum(axis=1)
+        ek = [integrate.trapz(G_plus, Gk[:,k]) for k in range(len(labelSet)) ] 
+
+    elif method == 'rank':
+        ek = []
+        N = len(label)
+
+        datarank = ss.rankdata(data)
+        
+        lengthSet = dict(Counter(label))    
+
+        intervalStart = 0
+        intervalEnd = 0
+
+
+        for key in lengthSet:
+            intervalEnd = intervalStart + lengthSet[key]
+            tempMeanRank = np.mean(datarank[intervalStart:intervalEnd])
+            ek.append(tempMeanRank/N)
+            intervalStart = intervalEnd
+    else:
+        ek = None
     return ek
 
 

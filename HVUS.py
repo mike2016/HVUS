@@ -30,7 +30,7 @@ def _con_general_counter_matrix(label,data):
         Constuct counter matrix CM for computing HVUS based on dynamic programming
 
     """
-    
+    labelSet = list(set(label))
     indexSort = np.argsort(data)
     dataSort = np.sort(data)
     labelSort = label[indexSort]
@@ -38,6 +38,7 @@ def _con_general_counter_matrix(label,data):
     CM = np.zeros((class_num,len(labelSort)))
     for i in range(len(labelSort)):
         CM[int(labelSort[i])-1][i] = 1
+
 
     return CM
 
@@ -98,33 +99,26 @@ def relative_effect(label,data,w=None,method='rank'):
     elif method == 'rank':
         ek = []
         N = len(label)
-
-        datarank = ss.rankdata(data)
         
-        lengthSet = dict(Counter(label))    
-
-        intervalStart = 0
-        intervalEnd = 0
-
-
-        for key in lengthSet:
-            intervalEnd = intervalStart + lengthSet[key]
-            tempMeanRank = np.mean(datarank[intervalStart:intervalEnd])
-            ek.append(tempMeanRank/N)
-            intervalStart = intervalEnd
+        datarank = ss.rankdata(data)
+        labelSet = list(set(label))
+        ek = []
+        for k,l in enumerate(labelSet):
+            
+            ek.append(np.mean(datarank[label == l])/N)
+    
     else:
         ek = None
     return ek
 
 
-def _unoredr2order(label,data):
+def _unorder2order(label,data):
     """
         Turn unorder data to order data according to their mean value 
 
     """
     labelSet = list(set(label))
     dataMean = relative_effect(label,data)
-    #dataMean2 = [ np.mean(data[label==i]) for i in labelSet ]
 
     dataMeanSort = dataMean.copy()
     dataMeanSort.sort()
@@ -133,6 +127,7 @@ def _unoredr2order(label,data):
     labelCopy = label.copy()
     for i,l in enumerate(labelSet):
         label[labelCopy==l] = labelSetSort[i]
+    label += 1
     return label,data
 
 def order_hvus(label,data): 
@@ -153,9 +148,9 @@ def order_hvus(label,data):
         hvus value 
 
     """
-    
 
-    label,data = _unoredr2order(label,data)
+    
+    label,data = _unorder2order(label,data)
 
     CM = _con_general_counter_matrix(label,data)
     class_num = len(set(label))
@@ -190,14 +185,19 @@ def hvus(label,data):
     """
     
 
-    label,data = _unoredr2order(label.copy(),data.copy())
+    hv = order_hvus(label.copy(),data.copy())
+
+    
+    label,data = _unorder2order(label.copy(),data.copy())
+ 
     label = np.array([int(i) for i in label])
 
-    hv = order_hvus(label.copy(),data.copy())
+    
+
 
     data = data[label.argsort()]
     label.sort()
-
+    
 
     var_hvus = 0
     class_num = len(set(label))
@@ -210,8 +210,7 @@ def hvus(label,data):
         
 
     data = np.r_[-np.inf,data,np.inf]
-    label = np.r_[0,label,class_num+1]+1
-    
+    label = np.r_[np.min(label)-1,label,np.max(label)+1]+1
     
     n = len(data)
 
@@ -221,7 +220,9 @@ def hvus(label,data):
 
 
     label = label[si]
+    
     subclass_num = np.array([np.sum((label==i)) for i in set(label)])
+
 
     gamaIndex = np.insert(gamaIndex,0,1,axis=1)
     gamaIndex = np.insert(gamaIndex,class_num+1,1,axis=1)
@@ -231,6 +232,7 @@ def hvus(label,data):
 
     uic = np.zeros((2**class_num))
 
+    
     for t in range(2**class_num):
         current_divide = gamaIndex[t][:]
         V = [i for i in range(len(current_divide)) if current_divide[i]==1]
@@ -242,7 +244,8 @@ def hvus(label,data):
         for p in range(len(V)-1):
             k = V[p]
             l = V[p+1]
-
+            
+            
             ww[p] = np.zeros((subclass_num[k],subclass_num[l]))
 
 
@@ -321,7 +324,7 @@ def hvus(label,data):
     var_hvus = var_hvus/((subclass_num[1:-1]-1).prod())
 
     return hv,var_hvus
-
+    
 
 
 
@@ -493,7 +496,7 @@ def plot_vus(label,data):
 
     """
     
-    label,data = _unoredr2order(label.copy(),data.copy())
+    label,data = _unorder2order(label.copy(),data.copy())
     labelSet = list(set(label))
     labelSet.sort()
     

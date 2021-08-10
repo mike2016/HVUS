@@ -14,11 +14,6 @@ git clone https://github.com/mike2016/HVUS.git
 cd HVUS
 ```
 
-- Uncompress the file HVUS-install.tar.gz and go inside the folder HVUS-x.x.x ("x.x.x" is the package version number)
-```
-tar zxvf HVUS-install.tar.gz
-cd HVUS-x.x.x # change x.x.x to current version number
-```
 
 - Install package
 ```

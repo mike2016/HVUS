@@ -19,8 +19,7 @@ import numpy as np
 import itertools 
 import scipy.stats as ss
 import os
-from scipy import integrate
-from collections import Counter
+
     
 
 
@@ -30,7 +29,7 @@ def _con_general_counter_matrix(label,data):
         Constuct counter matrix CM for computing HVUS based on dynamic programming
 
     """
-    labelSet = list(set(label))
+    
     indexSort = np.argsort(data)
     dataSort = np.sort(data)
     labelSort = label[indexSort]
@@ -38,7 +37,6 @@ def _con_general_counter_matrix(label,data):
     CM = np.zeros((class_num,len(labelSort)))
     for i in range(len(labelSort)):
         CM[int(labelSort[i])-1][i] = 1
-
 
     return CM
 
@@ -70,65 +68,22 @@ def _bitget(byteval, idx):
 
     return ((byteval & (1 << idx)) != 0)
 
-def relative_effect(label,data,w=None,method='rank'):
-    """
-        Calculate the ek value that is uesed to reorder the label 
-    """
 
-    if method == 'integrate':
-
-        labelSet = list(set(label))
-        if w is None:
-            w = np.ones(len(labelSet))*1/len(labelSet)
-        
-        tVec = np.unique(data)
-        
-        Gk = np.zeros((len(tVec),len(labelSet)))
-        for k,l in enumerate(labelSet):
-            Tk = data[label==l]
-            tMinIndex = np.argmax(tVec>=Tk.min())
-            tMaxIndex = np.argmax(tVec>=Tk.max())
-            Gk[:tMinIndex,k] = 0
-            Gk[tMaxIndex:,k] = 1
-            Gk[tMinIndex:tMaxIndex,k] = np.array([np.mean(Tk<=t) for t in tVec[tMinIndex:tMaxIndex]])
-            
-                
-        G_plus = (Gk*w).sum(axis=1)
-        ek = [integrate.trapz(G_plus, Gk[:,k]) for k in range(len(labelSet)) ] 
-
-    elif method == 'rank':
-        ek = []
-        N = len(label)
-        
-        datarank = ss.rankdata(data)
-        labelSet = list(set(label))
-        ek = []
-        for k,l in enumerate(labelSet):
-            
-            ek.append(np.mean(datarank[label == l])/N)
-    
-    else:
-        ek = None
-    return ek
-
-
-def _unorder2order(label,data):
+def _unoredr2order(label,data):
     """
         Turn unorder data to order data according to their mean value 
 
     """
+    
     labelSet = list(set(label))
-    dataMean = relative_effect(label,data)
-
-    dataMeanSort = dataMean.copy()
-    dataMeanSort.sort()
-    labelSetSort = [dataMeanSort.index(t) for t in dataMean] 
-
-    labelCopy = label.copy()
+    dataMean = np.array([ np.mean(data[label==i]) for i in labelSet ])
+    labelSetSort = np.arange(1,len(labelSet)+1)[np.argsort(dataMean)] 
+    label2 = label.copy()
     for i,l in enumerate(labelSet):
-        label[labelCopy==l] = labelSetSort[i]
-    label += 1
-    return label,data
+        label2[label==l] = labelSetSort[i]
+    data2 = data[np.argsort(label2)]
+    label2.sort()
+    return label2,data2
 
 def order_hvus(label,data): 
     """
@@ -148,19 +103,19 @@ def order_hvus(label,data):
         hvus value 
 
     """
-
     
-    label,data = _unorder2order(label,data)
+
+    label,data = _unoredr2order(label,data)
+    #label = np.array([int(i) for i in label])
 
     CM = _con_general_counter_matrix(label,data)
     class_num = len(set(label))
     subclass_num = np.array([(label==i).sum() for i in set(label)])
     update_rule = 'B' * (class_num-1)
     
-    h = _DP_continuous_eventcount(CM, update_rule)/subclass_num.prod()
+    hvus = _DP_continuous_eventcount(CM, update_rule)/subclass_num.prod()
 
-
-    return h
+    return hvus
 
 def hvus(label,data):
     """
@@ -185,19 +140,16 @@ def hvus(label,data):
     """
     
 
-    hv = order_hvus(label.copy(),data.copy())
-
     
-    label,data = _unorder2order(label.copy(),data.copy())
- 
+
+    hv = order_hvus(label,data)
+    
+    label,data = _unoredr2order(label,data)
     label = np.array([int(i) for i in label])
-
-    
-
 
     data = data[label.argsort()]
     label.sort()
-    
+
 
     var_hvus = 0
     class_num = len(set(label))
@@ -210,7 +162,8 @@ def hvus(label,data):
         
 
     data = np.r_[-np.inf,data,np.inf]
-    label = np.r_[np.min(label)-1,label,np.max(label)+1]+1
+    label = np.r_[0,label,class_num+1]+1
+    
     
     n = len(data)
 
@@ -220,9 +173,7 @@ def hvus(label,data):
 
 
     label = label[si]
-    
     subclass_num = np.array([np.sum((label==i)) for i in set(label)])
-
 
     gamaIndex = np.insert(gamaIndex,0,1,axis=1)
     gamaIndex = np.insert(gamaIndex,class_num+1,1,axis=1)
@@ -232,7 +183,6 @@ def hvus(label,data):
 
     uic = np.zeros((2**class_num))
 
-    
     for t in range(2**class_num):
         current_divide = gamaIndex[t][:]
         V = [i for i in range(len(current_divide)) if current_divide[i]==1]
@@ -244,8 +194,7 @@ def hvus(label,data):
         for p in range(len(V)-1):
             k = V[p]
             l = V[p+1]
-            
-            
+
             ww[p] = np.zeros((subclass_num[k],subclass_num[l]))
 
 
@@ -324,7 +273,7 @@ def hvus(label,data):
     var_hvus = var_hvus/((subclass_num[1:-1]-1).prod())
 
     return hv,var_hvus
-    
+
 
 
 
@@ -350,8 +299,8 @@ def cov_hvus(data1,data2,label):
     
 
     cov_hv = 0
-    hvus2 = order_hvus(label.copy(),data2.copy())
-    hvus1 = order_hvus(label.copy(),data1.copy())
+    hvus2 = order_hvus(label,data2)
+    hvus1 = order_hvus(label,data1)
 
 
     subclass_num1 = np.array([(label==i).sum() for i in set(label)])
@@ -465,10 +414,10 @@ def z_hypothetical_test(data1,data2,label,alpha=0.05):
     
     threshold = ss.norm.ppf(1-alpha/2)
     
-    hvus1,var_hvus1 = hvus(label.copy(),data1.copy())
-    hvus2,var_hvus2 = hvus(label.copy(),data2.copy())
+    hvus1,var_hvus1 = hvus(label,data1)
+    hvus2,var_hvus2 = hvus(label,data2)
     
-    cov_1_2 = cov_hvus(data1.copy(),data2.copy(),label.copy())     
+    cov_1_2 = cov_hvus(data1,data2,label)     
            
     
     z = (hvus2 - hvus1) / np.sqrt((var_hvus1 + var_hvus2 - 2 * cov_1_2))
@@ -496,7 +445,7 @@ def plot_vus(label,data):
 
     """
     
-    label,data = _unorder2order(label.copy(),data.copy())
+    label,data = _unoredr2order(label,data)
     labelSet = list(set(label))
     labelSet.sort()
     
@@ -516,5 +465,36 @@ def plot_vus(label,data):
             P3[i,j] = ( (data2 > th1) & (data2 <= th2) ).mean()
             P2[i,j] = (data3> th2).mean()
     return P1,P2,P3
+
+def plot_roc(label,data):
+    """
+    
+
+    Parameters
+    ----------
+    label : array-like of shape (n_samples,)
+        samples' label indicating whihch class a sample belongs to 
+    data : array-like of shape (n_samples,)
+        samples' value
+
+    Returns
+    -------
+    fpr,tpr :
+        2D data for ROC
         
 
+    """
+    label,data = _unoredr2order(label,data)
+    labelSet = np.unique(label)
+    labelSet.sort()    
+    data1 = data[label==labelSet[0]]
+    data2 = data[label==labelSet[1]]
+    ths = np.r_[-np.inf,np.sort(data)]
+    fpr = np.array([(data1>=t).mean() for t in ths])
+    tpr = np.array([(data2>=t).mean() for t in ths])
+
+    return fpr,tpr
+
+
+    
+    
